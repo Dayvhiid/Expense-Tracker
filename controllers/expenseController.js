@@ -31,12 +31,76 @@ const createExpense = async (req, res) => {
 
 const getAllExpenses = async (req, res) => {
   try {
-    const expenses = await Expense.find({ user: req.user._id }).sort({ date: -1 });
+    const { category, filter: dateFilter, startDate, endDate } = req.query;
+    
+    // Build filter object
+    const filter = { user: req.user._id };
+    
+    // Add category filter if provided
+    if (category) {
+      filter.category = category; 
+    }
+    
+    // Add date filter
+    const now = new Date();
+    let dateFilterObj = {};
+    
+    switch (dateFilter) {
+      case 'week':
+        const weekAgo = new Date(now);
+        weekAgo.setDate(now.getDate() - 7);
+        dateFilterObj = { $gte: weekAgo };
+        break;
+        
+      case 'month':
+        const monthAgo = new Date(now);
+        monthAgo.setMonth(now.getMonth() - 1);
+        dateFilterObj = { $gte: monthAgo };
+        break;
+        
+      case '3months':
+        const threeMonthsAgo = new Date(now);
+        threeMonthsAgo.setMonth(now.getMonth() - 3);
+        dateFilterObj = { $gte: threeMonthsAgo };
+        break;
+        
+      case 'custom':
+        if (startDate || endDate) {
+          if (startDate && endDate) {
+            dateFilterObj = { 
+              $gte: new Date(startDate), 
+              $lte: new Date(endDate) 
+            };
+          } else if (startDate) {
+            dateFilterObj = { $gte: new Date(startDate) };
+          } else if (endDate) {
+            dateFilterObj = { $lte: new Date(endDate) };
+          }
+        }
+        break;
+        
+      default:
+        // No date filter applied
+        break;
+    }
+    
+    // Add date filter to main filter if it exists
+    if (Object.keys(dateFilterObj).length > 0) {
+      filter.date = dateFilterObj;
+    }
+    
+    const expenses = await Expense.find(filter).sort({ date: -1 });
     
     res.json({
       success: true,
       count: expenses.length,
       data: expenses,
+      appliedFilters: {
+        category: category || null,
+        dateFilter: dateFilter || null,
+        startDate: startDate || null,
+        endDate: endDate || null
+      }
     });
   } catch (error) {
     res.status(500).json({
